@@ -302,6 +302,32 @@ class PerformanceCollector:
                     value=thermal_metric_value,
                     labels=current_labels,
                 )
+        elif self.col.urls["Thermal"]:
+            thermal = self.col.connect_server(self.col.urls["Thermal"])
+
+            # Check if thermal_subsystem data was received (connect_server returns "" on error)
+            if not thermal:
+                logging.warning(
+                    "Target %s: No thermal data received, skipping temperature metrics.",
+                    self.col.target,
+                )
+                return
+
+            temperatures = thermal.get("Temperatures", [])
+
+            for metric in temperatures:
+                current_labels = {"type": metric["Name"]}
+                current_labels.update(self.col.labels)
+                thermal_metric_value = (
+                    math.nan
+                    if metric["ReadingCelsius"] is None
+                    else metric["ReadingCelsius"]
+                )
+                self.temperature_metrics.add_sample(
+                    "redfish_temperature",
+                    value=thermal_metric_value,
+                    labels=current_labels,
+                )
 
     def collect(self):
         """Collects performance information from the Redfish API."""
