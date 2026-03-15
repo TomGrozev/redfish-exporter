@@ -4,7 +4,6 @@ from prometheus_client.metrics_core import GaugeMetricFamily, CounterMetricFamil
 
 
 class SensorsCollector:
-
     def __init__(self, redfish_metrics_collector):
         self.collector = redfish_metrics_collector
 
@@ -17,7 +16,9 @@ class SensorsCollector:
             "electrical_context": "ElectricalContext",
         }
 
-        self.labels = list(self.collector.labels.keys()) + list(self.sensor_labels.keys())
+        self.labels = list(self.collector.labels.keys()) + list(
+            self.sensor_labels.keys()
+        )
 
         self.gauge_metrics = GaugeMetricFamily(
             "redfish_sensors",
@@ -32,36 +33,39 @@ class SensorsCollector:
 
     def collect(self):
         logging.info("Target %s: Get the Sensor data.", self.collector.target)
-        url = self.collector.urls['Sensors']
+        url = self.collector.urls["Sensors"]
         sensors = self.collector.connect_server(url)
 
-        if sensors is None or 'Members' not in sensors:
-            logging.warning("Target %s: Cannot get Sensors data!", self.collector.target)
+        if sensors is None or "Members" not in sensors:
+            logging.warning(
+                "Target %s: Cannot get Sensors data!", self.collector.target
+            )
             return []
 
-        if sensors['Members'] == []:
+        if sensors["Members"] == []:
             logging.info("Target %s: No Sensors data found.", self.collector.target)
             return []
 
-        for sensor in sensors['Members']:
-            metric = self.collector.connect_server(sensor['@odata.id'])
+        for sensor in sensors["Members"]:
+            metric = self.collector.connect_server(sensor["@odata.id"])
 
-            status = metric.get('Status', {})
-            state = status.get('State')
-            reading = metric.get('Reading')
+            status = metric.get("Status", {})
+            state = status.get("State")
+            reading = metric.get("Reading")
 
-            if state != 'Enabled' or reading is None:
+            if state != "Enabled" or reading is None:
                 logging.debug(
                     "Target %s: Sensor %s is not enabled or has no reading.",
                     self.collector.target,
-                    metric.get('Id', 'unknown'),
+                    metric.get("Id", "unknown"),
                 )
                 continue
 
-            labels = ([self.collector.labels[key] for key in self.collector.labels.keys()]
-                      + [str(metric.get(k, "unknown")) for k in self.sensor_labels.values()])
+            labels = [
+                self.collector.labels[key] for key in self.collector.labels.keys()
+            ] + [str(metric.get(k, "unknown")) for k in self.sensor_labels.values()]
 
-            units = metric.get('ReadingUnits')
+            units = metric.get("ReadingUnits")
             is_counter = units in ["kW.h", "kWh", "Joules"]
 
             if is_counter:

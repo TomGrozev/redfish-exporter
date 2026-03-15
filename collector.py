@@ -1,4 +1,5 @@
 """Prometheus Exporter for collecting baremetal server Redfish metrics."""
+
 import logging
 import os
 import time
@@ -14,8 +15,10 @@ from collectors.health_collector import HealthCollector
 from collectors.certificate_collector import CertificateCollector
 from collectors.sensors_collector import SensorsCollector
 
+
 class RedfishMetricsCollector:
     """Class for collecting Redfish metrics."""
+
     def __enter__(self):
         return self
 
@@ -28,7 +31,7 @@ class RedfishMetricsCollector:
 
         self.metrics_type = metrics_type
 
-        self._timeout = int(os.getenv("TIMEOUT", config.get('timeout', 10)))
+        self._timeout = int(os.getenv("TIMEOUT", config.get("timeout", 10)))
         self.labels = {"host": self.host}
         self._redfish_up = 0
         self._response_time = 0
@@ -66,7 +69,7 @@ class RedfishMetricsCollector:
             "critical": 1,
             "error": 1,
             "warning": 2,
-            "absent": 0
+            "absent": 0,
         }
         self._start_time = time.time()
 
@@ -83,40 +86,45 @@ class RedfishMetricsCollector:
         server_response = self.connect_server("/redfish/v1", noauth=True)
 
         self._response_time = round(time.time() - start_time, 2)
-        logging.info("Target %s: Response time: %s seconds.", self.target, self._response_time)
+        logging.info(
+            "Target %s: Response time: %s seconds.", self.target, self._response_time
+        )
 
         if not server_response:
-            logging.warning("Target %s: No data received from server %s!", self.target, self.host)
+            logging.warning(
+                "Target %s: No data received from server %s!", self.target, self.host
+            )
             return
 
-        logging.debug("Target %s: data received from server %s.", self.target, self.host)
+        logging.debug(
+            "Target %s: data received from server %s.", self.target, self.host
+        )
 
         if "RedfishVersion" in server_response:
-            self.redfish_version = server_response['RedfishVersion']
+            self.redfish_version = server_response["RedfishVersion"]
 
         if "Vendor" in server_response:
-            self.vendor = server_response['Vendor']
+            self.vendor = server_response["Vendor"]
             logging.debug("Target %s: Vendor from root: %s", self.target, self.vendor)
 
         if "Product" in server_response:
-            self.product = server_response['Product']
+            self.product = server_response["Product"]
             logging.debug("Target %s: Product from root: %s", self.target, self.product)
 
         for key in ["Systems", "SessionService"]:
             if key in server_response:
-                self.urls[key] = server_response[key]['@odata.id']
+                self.urls[key] = server_response[key]["@odata.id"]
             else:
                 logging.warning(
                     "Target %s: No %s URL found on server %s!",
                     self.target,
                     key,
-                    self.host
+                    self.host,
                 )
                 return
 
         session_service = self.connect_server(
-            self.urls['SessionService'],
-            basic_auth=True
+            self.urls["SessionService"], basic_auth=True
         )
 
         if self._last_http_code != 200:
@@ -124,12 +132,14 @@ class RedfishMetricsCollector:
                 "Target %s: Failed to get a session from server %s! (HTTP code: %s)",
                 self.target,
                 self.host,
-                self._last_http_code
+                self._last_http_code,
             )
             self._basic_auth = True
             return
 
-        sessions_url = f"https://{self.target}{session_service['Sessions']['@odata.id']}"
+        sessions_url = (
+            f"https://{self.target}{session_service['Sessions']['@odata.id']}"
+        )
         session_data = {"UserName": self._username, "Password": self._password}
         self._session.auth = None
         result = ""
@@ -144,7 +154,8 @@ class RedfishMetricsCollector:
         except requests.exceptions.ConnectionError:
             logging.warning(
                 "Target %s: Failed to get an auth token from server %s. Retrying ...",
-                self.target, self.host
+                self.target,
+                self.host,
             )
             try:
                 result = self._session.post(
@@ -155,54 +166,64 @@ class RedfishMetricsCollector:
             except requests.exceptions.ConnectionError as e:
                 logging.error(
                     "Target %s: Error getting an auth token from server %s: %s",
-                    self.target, self.host, e
+                    self.target,
+                    self.host,
+                    e,
                 )
                 self._basic_auth = True
 
         except requests.exceptions.HTTPError as err:
             logging.warning(
                 "Target %s: No session received from server %s: %s",
-                self.target, self.host, err
+                self.target,
+                self.host,
+                err,
             )
-            logging.warning("Target %s: Switching to basic authentication.",
-                    self.target
+            logging.warning(
+                "Target %s: Switching to basic authentication.", self.target
             )
             self._basic_auth = True
 
         except requests.exceptions.ReadTimeout as err:
             logging.warning(
                 "Target %s: No session received from server %s: %s",
-                self.target, self.host, err
+                self.target,
+                self.host,
+                err,
             )
-            logging.warning("Target %s: Switching to basic authentication.",
-                    self.target
+            logging.warning(
+                "Target %s: Switching to basic authentication.", self.target
             )
             self._basic_auth = True
 
         if result and result.status_code in [200, 201, 202, 204]:
-            self._auth_token = result.headers['X-Auth-Token']
-            session_url = result.headers.get('Location')
+            self._auth_token = result.headers["X-Auth-Token"]
+            session_url = result.headers.get("Location")
 
             if not self._auth_token:
                 logging.warning("Target %s: No X-Auth-Token in headers", self.target)
                 self._redfish_up = 0
-                return    
+                return
 
             if not session_url:
                 try:
                     json_body = result.json()
-                    session_url = json_body.get('@odata.id')
+                    session_url = json_body.get("@odata.id")
                     logging.debug("Session URL from JSON: %s", session_url)
                 except (ValueError, requests.exceptions.JSONDecodeError) as e:
                     logging.warning("Invalid or empty JSON body. Exception: %s", e)
 
             if not session_url:
-                logging.warning("Session URL not found in either JSON body or Location header.")
+                logging.warning(
+                    "Session URL not found in either JSON body or Location header."
+                )
                 self._redfish_up = 0
                 return
 
             self._session_url = session_url
-            logging.info("Target %s: Got an auth token from server %s!", self.target, self.host)
+            logging.info(
+                "Target %s: Got an auth token from server %s!", self.target, self.host
+            )
             self._redfish_up = 1
 
     def connect_server(self, command, noauth=False, basic_auth=False):
@@ -232,7 +253,9 @@ class RedfishMetricsCollector:
             logging.debug("Target %s: Using no auth", self.target)
         elif basic_auth or self._basic_auth:
             self._session.auth = (self._username, self._password)
-            logging.debug("Target %s: Using basic auth with user %s", self.target, self._username)
+            logging.debug(
+                "Target %s: Using basic auth with user %s", self.target, self._username
+            )
         else:
             logging.debug("Target %s: Using auth token", self.target)
             self._session.auth = None
@@ -245,28 +268,43 @@ class RedfishMetricsCollector:
 
         except requests.exceptions.HTTPError as err:
             self._last_http_code = err.response.status_code
-            if err.response.status_code in [401,403]:
+            if err.response.status_code in [401, 403]:
                 logging.error(
                     "Target %s: Authorization Error: "
                     "Wrong job provided or user/password set wrong on server %s: %s",
-                    self.target, self.host, err
+                    self.target,
+                    self.host,
+                    err,
                 )
             else:
-                logging.error("Target %s: HTTP Error on server %s: %s", self.target, self.host, err)
+                logging.error(
+                    "Target %s: HTTP Error on server %s: %s",
+                    self.target,
+                    self.host,
+                    err,
+                )
 
         except requests.exceptions.ConnectTimeout:
-            logging.error("Target %s: Timeout while connecting to %s", self.target, self.host)
+            logging.error(
+                "Target %s: Timeout while connecting to %s", self.target, self.host
+            )
             self._last_http_code = 408
 
         except requests.exceptions.ReadTimeout:
-            logging.error("Target %s: Timeout while reading data from %s", self.target, self.host)
+            logging.error(
+                "Target %s: Timeout while reading data from %s", self.target, self.host
+            )
             self._last_http_code = 408
 
         except requests.exceptions.ConnectionError as err:
-            logging.error("Target %s: Unable to connect to %s: %s", self.target, self.host, err)
+            logging.error(
+                "Target %s: Unable to connect to %s: %s", self.target, self.host, err
+            )
             self._last_http_code = 444
         except requests.exceptions.RequestException:
-            logging.error("Target %s: Unexpected error: %s", self.target, sys.exc_info()[0])
+            logging.error(
+                "Target %s: Unexpected error: %s", self.target, sys.exc_info()[0]
+            )
             self._last_http_code = 500
 
         if req != "":
@@ -288,27 +326,34 @@ class RedfishMetricsCollector:
                     logging.debug(
                         "Target %s: %s: %s",
                         self.target,
-                        req_text['error']['code'],
-                        req_text['error']['message']
+                        req_text["error"]["code"],
+                        req_text["error"]["message"],
                     )
 
-                    if "@Message.ExtendedInfo" in req_text['error']:
-
-                        if isinstance(req_text['error']['@Message.ExtendedInfo'], list):
-                            if "Message" in req_text['error']['@Message.ExtendedInfo'][0]:
+                    if "@Message.ExtendedInfo" in req_text["error"]:
+                        if isinstance(req_text["error"]["@Message.ExtendedInfo"], list):
+                            if (
+                                "Message"
+                                in req_text["error"]["@Message.ExtendedInfo"][0]
+                            ):
                                 logging.debug(
                                     "Target %s: %s",
                                     self.target,
-                                    req_text['error']['@Message.ExtendedInfo'][0]['Message']
+                                    req_text["error"]["@Message.ExtendedInfo"][0][
+                                        "Message"
+                                    ],
                                 )
 
-                        elif isinstance(req_text['error']['@Message.ExtendedInfo'], dict):
-
-                            if "Message" in req_text['error']['@Message.ExtendedInfo']:
+                        elif isinstance(
+                            req_text["error"]["@Message.ExtendedInfo"], dict
+                        ):
+                            if "Message" in req_text["error"]["@Message.ExtendedInfo"]:
                                 logging.debug(
                                     "Target %s: %s",
                                     self.target,
-                                    req_text['error']['@Message.ExtendedInfo']['Message']
+                                    req_text["error"]["@Message.ExtendedInfo"][
+                                        "Message"
+                                    ],
                                 )
                         else:
                             pass
@@ -319,7 +364,7 @@ class RedfishMetricsCollector:
 
     def get_base_labels(self):
         """Get the basic labels for the metrics."""
-        systems = self.connect_server(self.urls['Systems'])
+        systems = self.connect_server(self.urls["Systems"])
 
         if not systems:
             return
@@ -327,113 +372,121 @@ class RedfishMetricsCollector:
         power_states = {"off": 0, "on": 1}
         # Get the server info for the labels
         server_info = {}
-        for member in systems['Members']:
-            self._systems_url = member['@odata.id']
+        for member in systems["Members"]:
+            self._systems_url = member["@odata.id"]
             info = self.connect_server(self._systems_url)
             if info:
                 server_info.update(info)
 
         if not server_info:
             return
-        self.manufacturer = server_info.get('Manufacturer')
+        self.manufacturer = server_info.get("Manufacturer")
         # Use Vendor from /redfish/v1 as fallback if Manufacturer is not available
         if not self.manufacturer and self.vendor:
             self.manufacturer = self.vendor
-            logging.info("Target %s: Using Vendor field as Manufacturer: %s", self.target, self.vendor)
-        self.model = server_info.get('Model')
+            logging.info(
+                "Target %s: Using Vendor field as Manufacturer: %s",
+                self.target,
+                self.vendor,
+            )
+        self.model = server_info.get("Model")
         # Use Product from /redfish/v1 as fallback if Model is not available
         if not self.model and self.product:
             self.model = self.product
-            logging.info("Target %s: Using Product field as Model: %s", self.target, self.product)
+            logging.info(
+                "Target %s: Using Product field as Model: %s", self.target, self.product
+            )
         if not self.manufacturer or not self.model:
-            logging.error("Target %s: No manufacturer or model found on server %s!", self.target, self.host)
+            logging.error(
+                "Target %s: No manufacturer or model found on server %s!",
+                self.target,
+                self.host,
+            )
             return
-        power_state = server_info.get('PowerState')
+        power_state = server_info.get("PowerState")
         self.powerstate = power_states[power_state.lower()] if power_state else 0
         # Dell has the Serial# in the SKU field, others in the SerialNumber field.
-        if "SKU" in server_info and re.match(r'^[Dd]ell.*', server_info['Manufacturer']):
-            self.serial = server_info['SKU']
+        if "SKU" in server_info and re.match(
+            r"^[Dd]ell.*", server_info["Manufacturer"]
+        ):
+            self.serial = server_info["SKU"]
         else:
-            self.serial = server_info['SerialNumber']
+            self.serial = server_info["SerialNumber"]
 
         self.labels.update(
             {
                 "host": self.host,
                 "server_manufacturer": self.manufacturer,
                 "server_model": self.model,
-                "server_serial": self.serial
+                "server_serial": self.serial,
             }
         )
 
-        self.server_health = self.status[server_info['Status']['Health'].lower()]
+        self.server_health = self.status[server_info["Status"]["Health"].lower()]
 
         # get the links of the parts for later
         for url in self.urls:
             if url in server_info:
-                self.urls[url] = server_info[url]['@odata.id']
+                self.urls[url] = server_info[url]["@odata.id"]
 
         # standard is a list but there are exceptions
-        if isinstance(server_info['Links']['Chassis'][0], str):
-            self.urls['Chassis'] = server_info['Links']['Chassis'][0]
-            self.urls['ManagedBy'] = server_info['Links']['ManagedBy'][0]
+        if isinstance(server_info["Links"]["Chassis"][0], str):
+            self.urls["Chassis"] = server_info["Links"]["Chassis"][0]
+            self.urls["ManagedBy"] = server_info["Links"]["ManagedBy"][0]
         else:
-            self.urls['Chassis'] = server_info['Links']['Chassis'][0]['@odata.id']
-            self.urls['ManagedBy'] = server_info['Links']['ManagedBy'][0]['@odata.id']
+            self.urls["Chassis"] = server_info["Links"]["Chassis"][0]["@odata.id"]
+            self.urls["ManagedBy"] = server_info["Links"]["ManagedBy"][0]["@odata.id"]
 
         self.get_chassis_urls()
 
     def get_chassis_urls(self):
         """Get the urls for the chassis parts."""
-        chassis_data = self.connect_server(self.urls['Chassis'])
+        chassis_data = self.connect_server(self.urls["Chassis"])
         if not chassis_data:
             return None
 
-        urls = ['PowerSubsystem', 'Power', 'ThermalSubsystem', 'Thermal', 'Sensors']
+        urls = ["PowerSubsystem", "Power", "ThermalSubsystem", "Thermal", "Sensors"]
 
         for url in urls:
             if url in chassis_data:
-                self.urls[url] = chassis_data[url]['@odata.id']
+                self.urls[url] = chassis_data[url]["@odata.id"]
 
         return chassis_data
 
     def collect(self):
         """Collect the metrics."""
-        if self.metrics_type == 'health':
+        if self.metrics_type == "health":
             up_metrics = GaugeMetricFamily(
                 "redfish_up",
                 "Redfish Server Monitoring availability",
-                labels = self.labels,
+                labels=self.labels,
             )
             up_metrics.add_sample(
-                "redfish_up", 
-                value = self._redfish_up,
-                labels = self.labels
+                "redfish_up", value=self._redfish_up, labels=self.labels
             )
             yield up_metrics
 
             version_metrics = GaugeMetricFamily(
                 "redfish_version",
                 "Redfish Server Monitoring redfish version",
-                labels = self.labels,
+                labels=self.labels,
             )
-            version_labels = {'version': self.redfish_version}
+            version_labels = {"version": self.redfish_version}
             version_labels.update(self.labels)
             version_metrics.add_sample(
-                "redfish_version",
-                value = 1,
-                labels = version_labels
+                "redfish_version", value=1, labels=version_labels
             )
             yield version_metrics
 
             response_metrics = GaugeMetricFamily(
                 "redfish_response_duration_seconds",
                 "Redfish Server Monitoring response time",
-                labels = self.labels,
+                labels=self.labels,
             )
             response_metrics.add_sample(
                 "redfish_response_duration_seconds",
-                value = self._response_time,
-                labels = self.labels,
+                value=self._response_time,
+                labels=self.labels,
             )
             yield response_metrics
 
@@ -442,8 +495,7 @@ class RedfishMetricsCollector:
 
         self.get_base_labels()
 
-        if self.metrics_type == 'health':
-
+        if self.metrics_type == "health":
             cert_metrics = CertificateCollector(self.host, self.target, self.labels)
             cert_metrics.collect()
 
@@ -455,10 +507,10 @@ class RedfishMetricsCollector:
             powerstate_metrics = GaugeMetricFamily(
                 "redfish_powerstate",
                 "Redfish Server Monitoring Power State Data",
-                labels = self.labels,
+                labels=self.labels,
             )
             powerstate_metrics.add_sample(
-                "redfish_powerstate", value = self.powerstate, labels = self.labels
+                "redfish_powerstate", value=self.powerstate, labels=self.labels
             )
             yield powerstate_metrics
 
@@ -470,27 +522,27 @@ class RedfishMetricsCollector:
             yield metrics.health_metrics
 
         # Get the firmware information
-        if self.metrics_type == 'firmware':
+        if self.metrics_type == "firmware":
             metrics = FirmwareCollector(self)
             metrics.collect()
 
             yield metrics.fw_metrics
 
         # Get the bios settings
-        if self.metrics_type == 'bios':
+        if self.metrics_type == "bios":
             metrics = BiosCollector(self)
             for metric in metrics.collect():
                 yield metric
 
         # Get the performance information
-        if self.metrics_type == 'performance':
+        if self.metrics_type == "performance":
             metrics = PerformanceCollector(self)
             metrics.collect()
 
             yield metrics.power_metrics
             yield metrics.temperature_metrics
 
-        if self.metrics_type == 'sensors':
+        if self.metrics_type == "sensors":
             metrics = SensorsCollector(self)
             yield from metrics.collect()
 
@@ -498,24 +550,28 @@ class RedfishMetricsCollector:
         duration = round(time.time() - self._start_time, 2)
         logging.info(
             "Target %s: %s scrape duration: %s seconds",
-            self.target, self.metrics_type, duration
+            self.target,
+            self.metrics_type,
+            duration,
         )
 
         scrape_metrics = GaugeMetricFamily(
             f"redfish_{self.metrics_type}_scrape_duration_seconds",
             f"Redfish Server Monitoring redfish {self.metrics_type} scrape duration in seconds",
-            labels = self.labels,
+            labels=self.labels,
         )
 
         scrape_metrics.add_sample(
             f"redfish_{self.metrics_type}_scrape_duration_seconds",
-            value = duration,
-            labels = self.labels,
+            value=duration,
+            labels=self.labels,
         )
         yield scrape_metrics
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        logging.debug("Target %s: Deleting Redfish session with server %s", self.target, self.host)
+        logging.debug(
+            "Target %s: Deleting Redfish session with server %s", self.target, self.host
+        )
 
         response = None
 
@@ -537,26 +593,29 @@ class RedfishMetricsCollector:
             except requests.exceptions.RequestException as e:
                 logging.error(
                     "Target %s: Error deleting session with server %s: %s",
-                    self.target, self.host, e
+                    self.target,
+                    self.host,
+                    e,
                 )
 
             if response:
-                logging.info("Target %s: Redfish Session deleted successfully.", self.target)
+                logging.info(
+                    "Target %s: Redfish Session deleted successfully.", self.target
+                )
             else:
                 logging.warning(
                     "Target %s: Failed to delete session with server %s",
                     self.target,
-                    self.host
+                    self.host,
                 )
 
         else:
             logging.debug(
                 "Target %s: No Redfish session existing with server %s",
                 self.target,
-                self.host
+                self.host,
             )
 
         if self._session:
             logging.info("Target %s: Closing requests session.", self.target)
             self._session.close()
-

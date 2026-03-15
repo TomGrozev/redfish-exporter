@@ -1,11 +1,14 @@
 """Collects health information from the Redfish API."""
+
 import logging
 import math
 
 from prometheus_client.core import GaugeMetricFamily
 
-class HealthCollector():
+
+class HealthCollector:
     """Collects health information from the Redfish API."""
+
     def __enter__(self):
         return self
 
@@ -55,10 +58,7 @@ class HealthCollector():
             current_labels.update(self.col.labels)
 
             self.add_metric_sample(
-                "redfish_health",
-                {"Health": proc_status},
-                "Health",
-                current_labels
+                "redfish_health", {"Health": proc_status}, "Health", current_labels
             )
 
     def get_storage_health(self):
@@ -75,17 +75,21 @@ class HealthCollector():
                 continue
 
             controller_details = self.get_controller_details(controller_data)
-            controller_name = self.get_controller_name(controller_details, controller_data)
+            controller_name = self.get_controller_name(
+                controller_details, controller_data
+            )
             controller_status = self.extract_health_status(
                 controller_details, "Controller", controller_name
             )
 
-            current_labels = self.get_controller_labels(controller_details, controller_name)
+            current_labels = self.get_controller_labels(
+                controller_details, controller_name
+            )
             self.add_metric_sample(
                 "redfish_health",
                 {"Health": controller_status},
                 "Health",
-                current_labels
+                current_labels,
             )
 
             for disk in controller_data["Drives"]:
@@ -94,16 +98,11 @@ class HealthCollector():
                     continue
 
                 disk_status = self.extract_health_status(
-                    disk_data,
-                    "Disk",
-                    disk_data.get("Name", "unknown")
+                    disk_data, "Disk", disk_data.get("Name", "unknown")
                 )
                 current_labels = self.get_disk_labels(disk_data)
                 self.add_metric_sample(
-                    "redfish_health",
-                    {"Health": disk_status},
-                    "Health",
-                    current_labels
+                    "redfish_health", {"Health": disk_status}, "Health", current_labels
                 )
 
     def get_controller_details(self, controller_data):
@@ -138,7 +137,7 @@ class HealthCollector():
                 self.col.host,
                 self.col.model,
                 device_type,
-                device_name
+                device_name,
             )
             return math.nan
 
@@ -148,7 +147,7 @@ class HealthCollector():
                 "Target %s: No %s health data provided for %s!",
                 self.col.target,
                 device_type,
-                device_name
+                device_name,
             )
             return math.nan
 
@@ -189,17 +188,13 @@ class HealthCollector():
         if not chassis_data:
             return
 
-        current_labels = {
-            "device_type": "chassis",
-            "device_name": chassis_data["Name"]
-        }
+        current_labels = {"device_type": "chassis", "device_name": chassis_data["Name"]}
         current_labels.update(self.col.labels)
-        chassis_health = self.extract_health_status(chassis_data, "Chassis", chassis_data["Name"])
+        chassis_health = self.extract_health_status(
+            chassis_data, "Chassis", chassis_data["Name"]
+        )
         self.add_metric_sample(
-            "redfish_health",
-            {"Health": chassis_health},
-            "Health",
-            current_labels
+            "redfish_health", {"Health": chassis_health}, "Health", current_labels
         )
 
     def get_power_health(self):
@@ -208,28 +203,33 @@ class HealthCollector():
         power_data = self.col.connect_server(self.col.urls["Power"])
         if not power_data:
             return
-        
+
         power_supplies = power_data.get("PowerSupplies", [])
         if not power_supplies:
-            logging.warning("Target %s: No PowerSupplies found in Power data!", self.col.target)
+            logging.warning(
+                "Target %s: No PowerSupplies found in Power data!", self.col.target
+            )
             return
-        
+
         for psu in power_supplies:
-            psu_name = psu["Name"] if "Name" in psu and psu["Name"] is not None else "unknown"
-            psu_model = psu["Model"] if "Model" in psu and psu["Model"] is not None else "unknown"
+            psu_name = (
+                psu["Name"] if "Name" in psu and psu["Name"] is not None else "unknown"
+            )
+            psu_model = (
+                psu["Model"]
+                if "Model" in psu and psu["Model"] is not None
+                else "unknown"
+            )
 
             current_labels = {
                 "device_type": "powersupply",
                 "device_name": psu_name,
-                "device_model": psu_model
+                "device_model": psu_model,
             }
             current_labels.update(self.col.labels)
             psu_health = self.extract_health_status(psu, "PSU", psu_name)
             self.add_metric_sample(
-                "redfish_health",
-                {"Health": psu_health},
-                "Health",
-                current_labels
+                "redfish_health", {"Health": psu_health}, "Health", current_labels
             )
 
     def get_thermal_health(self):
@@ -249,17 +249,11 @@ class HealthCollector():
 
         for fan in fans:
             fan_name = fan.get("Name", "unknown")
-            current_labels = {
-                "device_type": "fan",
-                "device_name": fan_name
-            }
+            current_labels = {"device_type": "fan", "device_name": fan_name}
             current_labels.update(self.col.labels)
             fan_health = self.extract_health_status(fan, "Fan", fan_name)
             self.add_metric_sample(
-                "redfish_health",
-                {"Health": fan_health},
-                "Health",
-                current_labels
+                "redfish_health", {"Health": fan_health}, "Health", current_labels
             )
 
     def get_memory_health(self):
@@ -276,9 +270,7 @@ class HealthCollector():
                 continue
 
             dimm_health = self.extract_health_status(
-                dimm_info,
-                "Dimm",
-                dimm_info.get("Name", "unknown")
+                dimm_info, "Dimm", dimm_info.get("Name", "unknown")
             )
             if dimm_health is math.nan:
                 logging.debug(
@@ -286,16 +278,13 @@ class HealthCollector():
                     self.col.target,
                     self.col.host,
                     self.col.model,
-                    dimm_info['Name']
+                    dimm_info["Name"],
                 )
                 continue
 
             current_labels = self.get_dimm_labels(dimm_info)
             self.add_metric_sample(
-                "redfish_health",
-                {"Health": dimm_health},
-                "Health",
-                current_labels
+                "redfish_health", {"Health": dimm_health}, "Health", current_labels
             )
 
             if "Metrics" in dimm_info:
@@ -309,11 +298,13 @@ class HealthCollector():
             "dimm_capacity": str(dimm_info["CapacityMiB"]),
             "dimm_speed": str(dimm_info.get("OperatingSpeedMhz", "unknown")),
             "dimm_type": dimm_info["MemoryDeviceType"],
-            "device_manufacturer": dimm_info.get("Manufacturer", "N/A")
+            "device_manufacturer": dimm_info.get("Manufacturer", "N/A"),
         }
 
         if "Oem" in dimm_info and "Hpe" in dimm_info["Oem"]:
-            labels["device_manufacturer"] = dimm_info["Oem"]["Hpe"].get("VendorName", "unknown")
+            labels["device_manufacturer"] = dimm_info["Oem"]["Hpe"].get(
+                "VendorName", "unknown"
+            )
 
         labels.update(self.col.labels)
         return labels
@@ -329,14 +320,14 @@ class HealthCollector():
             "redfish_memory_correctable",
             health_data,
             "CorrectableECCError",
-            current_labels
+            current_labels,
         )
 
         self.add_metric_sample(
             "redfish_memory_uncorrectable",
             health_data,
             "UncorrectableECCError",
-            current_labels
+            current_labels,
         )
 
     def add_metric_sample(self, metric_name, data, key, labels):
@@ -353,13 +344,15 @@ class HealthCollector():
                 self.col.host,
                 self.col.model,
                 labels["device_name"],
-                key
+                key,
             )
         else:
             if metric_name == "redfish_health":
                 metric_family = self.health_metrics
             else:
-                metric_family = getattr(self, f"mem_metrics_{metric_name.split('_')[-1]}")
+                metric_family = getattr(
+                    self, f"mem_metrics_{metric_name.split('_')[-1]}"
+                )
             metric_family.add_sample(metric_name, value=value, labels=labels)
 
     def collect_health_data(self, url_key):
@@ -382,10 +375,17 @@ class HealthCollector():
             "redfish_health",
             {"Health": self.col.server_health},
             "Health",
-            current_labels
+            current_labels,
         )
 
-        for url_key in ["Processors", "Storage", "Chassis", "Power", "Thermal", "Memory"]:
+        for url_key in [
+            "Processors",
+            "Storage",
+            "Chassis",
+            "Power",
+            "Thermal",
+            "Memory",
+        ]:
             self.collect_health_data(url_key)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -394,5 +394,5 @@ class HealthCollector():
                 "Target %s: An exception occured in %s:%s",
                 self.col.target,
                 exc_tb.tb_frame.f_code.co_filename,
-                exc_tb.tb_lineno
+                exc_tb.tb_lineno,
             )

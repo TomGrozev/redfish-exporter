@@ -16,6 +16,7 @@ from collector import RedfishMetricsCollector
 
 # pylint: disable=no-member
 
+
 class WelcomePage:
     """
     Create the Welcome page for the API.
@@ -27,7 +28,7 @@ class WelcomePage:
         """
 
         resp.status = falcon.HTTP_200
-        resp.content_type = 'text/html'
+        resp.content_type = "text/html"
         resp.text = """
         <h1>Redfish Exporter</h1>
         <h2>Prometheus Exporter for redfish API based servers monitoring</h2>
@@ -37,6 +38,7 @@ class WelcomePage:
             <li><strong>Performance Metrics:</strong> Use <code>/performance</code> to retrieve performance-related metrics like power consumption and temperature data.</li>
         </ul>
         """
+
 
 class MetricsHandler:
     """
@@ -76,7 +78,11 @@ class MetricsHandler:
             try:
                 host = socket.gethostbyaddr(target)[0]
             except socket.herror as err:
-                logging.warning("Target %s: Reverse DNS lookup failed: %s. Using IP address as host.", target, err)
+                logging.warning(
+                    "Target %s: Reverse DNS lookup failed: %s. Using IP address as host.",
+                    target,
+                    err,
+                )
                 host = target
         else:
             logging.debug("Target %s: Target is a hostname.", target)
@@ -106,13 +112,12 @@ class MetricsHandler:
 
         with RedfishMetricsCollector(
             self._config,
-            target = target,
-            host = host,
-            usr = usr,
-            pwd = pwd,
-            metrics_type = self.metrics_type
+            target=target,
+            host=host,
+            usr=usr,
+            pwd=pwd,
+            metrics_type=self.metrics_type,
         ) as registry:
-
             # open a session with the remote board
             registry.get_session()
 
